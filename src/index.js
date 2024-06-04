@@ -1,6 +1,7 @@
 const express = require('express')
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
+const yup = require('yup')
 const app = express()
 app.use(express.json())
 const port = 3000
@@ -54,17 +55,36 @@ app.post('/login', async (req, res) => {
 
 })
 
+const registerSchema = yup.object({
+  username: string().required().min(5),
+  password: string().required().min(8).max(72),
+  email: string().email().required()
+}).noUnkown()
+
 app.post('/register', async (req, res) => {
   // <TO-DO Validade register>
-  const user = new User({
-    username: req.body.username,
-    password: req.body.password,
-    email: req.body.email
+  registerSchema.validate(req.body)
+  .catch(err => res.status(422).send(err))
+  .then(register)
+  .then((status,data) => res.status(status).send(data))
+  .catch(err => {
+    console.log(err)
+    res.status(500).send(err)
+  })
+})
+
+async function register(request) {
+  // <TO-DO> Hash Password
+  //
+  const newUser = new User({
+    username: request.body.username,
+    password: request.body.password,
+    email: request.body.email
   })
 
-  await user.save()
-  return res.send(user)
-})
+  await newUser.save()
+  return {status:200, data:newUser}
+}
 
 app.listen(port, async () => {
   await mongoose.connect('mongodb+srv://luizgmelo64:<password>@login-api.t0dohpy.mongodb.net/?retryWrites=true&w=majority&appName=login-api')
