@@ -2,10 +2,12 @@ const express = require('express')
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
 const yup = require('yup')
+const bcrypt = require('bcrypt')
 const app = express()
 app.use(express.json())
 const port = 3000
 const mySecret = "mySecret"
+const saltRounds = 10
 
 const UserSchema = new mongoose.Schema({
   username: String,
@@ -56,17 +58,20 @@ app.post('/login', async (req, res) => {
 })
 
 const registerSchema = yup.object({
-  username: string().required().min(5),
-  password: string().required().min(8).max(72),
-  email: string().email().required()
-}).noUnkown()
+  username: yup.string().required().min(5),
+  password: yup.string().required().min(8).max(72),
+  email: yup.string().email().required()
+}).noUnknown()
 
 app.post('/register', async (req, res) => {
-  // <TO-DO Validade register>
   registerSchema.validate(req.body)
-  .catch(err => res.status(422).send(err))
+  .catch(err => res.status(422).send(err.errors))
   .then(register)
-  .then((status,data) => res.status(status).send(data))
+  .then(({status, data}) => {
+    console.log(status)
+    console.log(data)
+    res.status(status).send(data)
+  })
   .catch(err => {
     console.log(err)
     res.status(500).send(err)
@@ -74,16 +79,16 @@ app.post('/register', async (req, res) => {
 })
 
 async function register(request) {
-  // <TO-DO> Hash Password
-  //
+  const passwordHashed = bcrypt.hashSync(request.password, saltRounds)
+  
   const newUser = new User({
-    username: request.body.username,
-    password: request.body.password,
-    email: request.body.email
+    username: request.username,
+    password: passwordHashed,
+    email: request.email
   })
 
   await newUser.save()
-  return {status:200, data:newUser}
+  return {status:200, data:{newUser}}
 }
 
 app.listen(port, async () => {
