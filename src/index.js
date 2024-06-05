@@ -3,6 +3,8 @@ const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
 const yup = require('yup')
 const bcrypt = require('bcrypt')
+const dotenv = require('dotenv')
+dotenv.config()
 const app = express()
 app.use(express.json())
 const port = 3000
@@ -35,27 +37,44 @@ app.get('/hello', (req, res) => {
 
 })
 
-app.post('/login', async (req, res) => {
-  // <TO-DO Validade login>
+const loginSchema = yup.object({
+  email: yup.string().email().required(),
+  password: yup.string().required().min(8).max(72)
+}).noUnknown()
+
+app.post('/login', (req, res) => {
+  loginSchema.validate(req.body)
+  .catch(err => res.status(422).send(err.errors))
+  .then(login)
+  .then(({status,data}) => {
+    res.status(status).send(data)
+  })
+  .catch((err) => {
+    console.log(err)
+    res.status(500).send(err)
+  })
+})
+
+async function login(request) {
   const userPayload = new User({
-    email: req.body.email,
-    password: req.body.password
+    email: request.email,
+    password: request.password
   })
 
   const query = User.where({email: userPayload.email})
   const user = await query.findOne()
-  if (user != null) {
-    if (user.password == userPayload.password) {
-      const token = jwt.sign({email: user.email, username: user.username}, mySecret)
-      res.send(token)
-    } else {
-      res.send('Ops... Wrong Email or Password!')
-    }
-  } else {
-    res.send('Ops... Wrong Email or Password!')
-  }
 
-})
+  console.log(user.password)
+
+  if (user != null) {
+    const match = bcrypt.compare(userPayload.password, user.password)
+    if (match) {
+      const token = jwt.sign({email: user.email, username: user.username}, mySecret)
+      return {status:200, data: {token}}
+    } 
+  } 
+  return {status:403, data:'Wrong email or password!'}
+}
 
 const registerSchema = yup.object({
   username: yup.string().required().min(5),
@@ -65,11 +84,9 @@ const registerSchema = yup.object({
 
 app.post('/register', async (req, res) => {
   registerSchema.validate(req.body)
-  .catch(err => res.status(422).send(err.errors))
   .then(register)
+  .catch(err => res.status(422).send(err.errors))
   .then(({status, data}) => {
-    console.log(status)
-    console.log(data)
     res.status(status).send(data)
   })
   .catch(err => {
@@ -92,6 +109,6 @@ async function register(request) {
 }
 
 app.listen(port, async () => {
-  await mongoose.connect('mongodb+srv://luizgmelo64:<password>@login-api.t0dohpy.mongodb.net/?retryWrites=true&w=majority&appName=login-api')
+  await mongoose.connect(`mongodb+srv://luizgmelo64:${process.env.MONGODB_MY_PASSWORD}@login-api.t0dohpy.mongodb.net/?retryWrites=true&w=majority&appName=login-api`)
   console.log(`App running and listen at port ${port}`)
 })
